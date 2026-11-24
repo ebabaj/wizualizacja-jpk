@@ -1,0 +1,13 @@
+# Pliki JPK zawierają dane podatnika i kontrahentów – nie trafiają do repozytorium
+Materiały/
+Materialy/
+*.xml
+!*.xslt
+
+# Wygenerowane wizualizacje
+*.html
+
+# Pliki tymczasowe
+*.tmp
+Thumbs.db
+desktop.ini

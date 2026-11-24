@@ -47,8 +47,6 @@ Strona nadaje się do wydruku: przy drukowaniu tabele pokazują się w całości
 | `aktualizuj_opisy.bat` | Uruchamia `aktualizuj_opisy.ps1`, a potem `build.bat` |
 | `LICENSE` | Licencja MIT |
 
-Pliki JPK (`*.xml`) i wygenerowane z nich strony (`*.html`) są wykluczone w `.gitignore`, ponieważ zawierają dane podatnika i kontrahentów. Folder `Materiały\` służy do trzymania własnych plików lokalnie i też nie trafia do repozytorium.
-
 ## Zmiana wyglądu strony
 
 Szablon `jpk_v7.xslt` jest wkompilowany w `JpkViewer.exe`. Jeśli jednak plik `jpk_v7.xslt` leży w tym samym folderze co program, **program używa tej wersji zamiast wbudowanej**. Dzięki temu zmiany w szablonie widać od razu, bez kompilowania.

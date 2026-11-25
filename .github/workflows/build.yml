@@ -1,0 +1,39 @@
+
+name: Build and attest JpkViewer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Compile JpkViewer
+        shell: cmd
+        run: |
+          if exist JpkViewer.exe del JpkViewer.exe
+          call build.bat
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: JpkViewer.exe
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: JpkViewer
+          path: JpkViewer.exe
+          if-no-files-found: error

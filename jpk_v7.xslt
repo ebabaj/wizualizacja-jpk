@@ -10,6 +10,14 @@
   <!-- parametry przekazywane z programu (XsltArgumentList) -->
   <xsl:param name="plik" select="''"/>
   <xsl:param name="wygenerowano" select="''"/>
+  <!-- JPK_V7K: dane o pozostałych miesiącach kwartału (wylicza program, zob. JpkViewer.cs)
+       kwartal      – 'pelny' (są pliki za wszystkie miesiące), 'niepelny' albo '' (nie sprawdzano)
+       kwartalSumy  – sumy pól K_ z pozostałych miesięcy: |K_19=12500|K_20=2875|…|
+       kwartalPliki – opis użytych plików, kwartalBrak – miesiące, dla których brak pliku -->
+  <xsl:param name="kwartal" select="''"/>
+  <xsl:param name="kwartalSumy" select="'|'"/>
+  <xsl:param name="kwartalPliki" select="''"/>
+  <xsl:param name="kwartalBrak" select="''"/>
 
   <xsl:decimal-format name="pl" decimal-separator="," grouping-separator="&#160;"/>
 
@@ -31,6 +39,10 @@
   <xsl:variable name="liczbaFP" select="count($sprzedaz) - count($sprzedazBezFP)"/>
   <xsl:variable name="zakupy" select="$ewidencja/*[local-name()='ZakupWiersz']"/>
   <xsl:variable name="deklaracja" select="/*/*[local-name()='Deklaracja']"/>
+  <!-- deklaracja kwartalna (VAT-7K) obejmuje trzy miesiące, a ewidencja w pliku – tylko jeden;
+       z ewidencją porównujemy ją tylko wtedy, gdy program znalazł pliki za cały kwartał -->
+  <xsl:variable name="kwartalDekl" select="$deklaracja/*[local-name()='Naglowek']/*[local-name()='Kwartal']"/>
+  <xsl:variable name="porownuj" select="not($kwartalDekl) or $kwartal = 'pelny'"/>
 
   <!-- ============================================================ -->
   <xsl:template match="/">
@@ -159,17 +171,56 @@
             </h2>
             <label class="przelacznik"><input type="checkbox" id="ukryjZera" checked="checked"/> ukryj pozycje zerowe</label>
           </div>
+          <xsl:if test="$kwartalDekl">
+            <xsl:variable name="okresKw" select="concat('Q', $kwartalDekl, '/', $nag/*[local-name()='Rok'])"/>
+            <xsl:choose>
+              <xsl:when test="$porownuj">
+                <p class="info">
+                  <xsl:text>Deklaracja kwartalna (</xsl:text><xsl:value-of select="$okresKw"/>
+                  <xsl:text>) porównana z ewidencją z całego kwartału: </xsl:text>
+                  <xsl:value-of select="$kwartalPliki"/><xsl:text>.</xsl:text>
+                </p>
+              </xsl:when>
+              <xsl:otherwise>
+                <p class="info warn">
+                  <xsl:text>Deklaracja kwartalna (</xsl:text><xsl:value-of select="$okresKw"/>
+                  <xsl:text>) obejmuje trzy miesiące, a ten plik zawiera ewidencję tylko za </xsl:text>
+                  <xsl:value-of select="format-number($nag/*[local-name()='Miesiac'], '00')"/>/<xsl:value-of select="$nag/*[local-name()='Rok']"/>
+                  <xsl:text>. Brak ewidencji za: </xsl:text>
+                  <xsl:choose>
+                    <xsl:when test="$kwartalBrak != ''"><xsl:value-of select="$kwartalBrak"/></xsl:when>
+                    <xsl:otherwise>pozostałe miesiące kwartału</xsl:otherwise>
+                  </xsl:choose>
+                  <xsl:text>, więc zgodności deklaracji z ewidencją nie sprawdzono. Aby ją sprawdzić, umieść pliki JPK_V7K za pozostałe miesiące kwartału w tym samym folderze albo wybierz je razem z tym plikiem.</xsl:text>
+                </p>
+              </xsl:otherwise>
+            </xsl:choose>
+          </xsl:if>
           <table class="dekl ukryj-zera" id="tabDekl">
             <thead>
-              <tr><th>Poz.</th><th>Opis</th><th class="num">Deklaracja</th><th class="num">Suma z ewidencji</th><th></th></tr>
+              <tr>
+                <th>Poz.</th><th>Opis</th><th class="num">Deklaracja</th>
+                <th class="num">
+                  <xsl:text>Suma z ewidencji</xsl:text>
+                  <xsl:if test="$kwartalDekl">
+                    <xsl:choose>
+                      <xsl:when test="$porownuj"> (kwartał)</xsl:when>
+                      <xsl:otherwise> (niepełna)</xsl:otherwise>
+                    </xsl:choose>
+                  </xsl:if>
+                </th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
               <xsl:for-each select="$deklaracja/*[local-name()='PozycjeSzczegolowe']/*">
                 <xsl:variable name="nr" select="substring-after(local-name(), 'P_')"/>
-                <xsl:variable name="kpola" select="key('kpole', concat('K_', $nr))"/>
+                <xsl:variable name="sumaTxt"><xsl:call-template name="sumaK"><xsl:with-param name="nr" select="$nr"/></xsl:call-template></xsl:variable>
+                <xsl:variable name="maK" select="string($sumaTxt) != ''"/>
+                <xsl:variable name="suma" select="number($sumaTxt)"/>
                 <xsl:variable name="czyLiczba" select="string(number(.)) != 'NaN'"/>
                 <tr>
-                  <xsl:if test="$czyLiczba and number(.) = 0 and not($kpola[number(.) != 0])">
+                  <xsl:if test="$czyLiczba and number(.) = 0 and not($maK and $suma != 0)">
                     <xsl:attribute name="class">zero</xsl:attribute>
                   </xsl:if>
                   <xsl:if test="$nr = '37' or $nr = '38' or $nr = '48' or $nr = '51' or $nr = '53'">
@@ -186,14 +237,15 @@
                     </xsl:choose>
                   </td>
                   <td class="num muted">
-                    <xsl:if test="$kpola">
-                      <xsl:value-of select="format-number(sum($kpola), '#&#160;##0,00', 'pl')"/>
+                    <xsl:if test="$maK">
+                      <xsl:value-of select="format-number($suma, '#&#160;##0,00', 'pl')"/>
                     </xsl:if>
                   </td>
                   <td>
-                    <xsl:if test="$kpola">
+                    <xsl:if test="$maK">
                       <xsl:choose>
-                        <xsl:when test="round(sum($kpola)) = number(.)"><span class="ok" title="Zgodne z ewidencją (po zaokrągleniu)">✓</span></xsl:when>
+                        <xsl:when test="not($porownuj)"><span class="nd" title="Nie sprawdzono – brak ewidencji za część miesięcy kwartału">–</span></xsl:when>
+                        <xsl:when test="round($suma) = number(.)"><span class="ok" title="Zgodne z ewidencją (po zaokrągleniu)">✓</span></xsl:when>
                         <xsl:otherwise><span class="blad" title="Niezgodne z sumą pól K_ w ewidencji">✗</span></xsl:otherwise>
                       </xsl:choose>
                     </xsl:if>
@@ -378,20 +430,36 @@
               </xsl:call-template>
             </xsl:if>
             <xsl:if test="$deklaracja">
-              <xsl:variable name="poz" select="$deklaracja/*[local-name()='PozycjeSzczegolowe']/*"/>
-              <xsl:variable name="niezgodne" select="$poz[key('kpole', concat('K_', substring-after(local-name(), 'P_'))) and round(sum(key('kpole', concat('K_', substring-after(local-name(), 'P_'))))) != number(.)]"/>
               <tr>
-                <td>Pozycje deklaracji zgodne z ewidencją (P_n = zaokr. Σ K_n)</td>
-                <td class="num" colspan="2">
-                  <xsl:choose>
-                    <xsl:when test="$niezgodne">
-                      <xsl:text>niezgodne: </xsl:text>
-                      <xsl:for-each select="$niezgodne"><xsl:value-of select="local-name()"/><xsl:if test="position() != last()">, </xsl:if></xsl:for-each>
-                    </xsl:when>
-                    <xsl:otherwise>wszystkie zgodne</xsl:otherwise>
-                  </xsl:choose>
+                <td>
+                  <xsl:text>Pozycje deklaracji zgodne z ewidencją </xsl:text>
+                  <xsl:if test="$kwartalDekl">całego kwartału </xsl:if>
+                  <xsl:text>(P_n = zaokr. Σ K_n)</xsl:text>
                 </td>
-                <td><xsl:choose><xsl:when test="$niezgodne"><span class="blad">✗</span></xsl:when><xsl:otherwise><span class="ok">✓</span></xsl:otherwise></xsl:choose></td>
+                <xsl:choose>
+                  <xsl:when test="not($porownuj)">
+                    <td class="num muted" colspan="2">nie sprawdzono – deklaracja kwartalna, brak ewidencji za część miesięcy kwartału</td>
+                    <td><span class="nd">–</span></td>
+                  </xsl:when>
+                  <xsl:otherwise>
+                    <xsl:variable name="lista">
+                      <xsl:for-each select="$deklaracja/*[local-name()='PozycjeSzczegolowe']/*">
+                        <xsl:variable name="sumaTxt"><xsl:call-template name="sumaK"><xsl:with-param name="nr" select="substring-after(local-name(), 'P_')"/></xsl:call-template></xsl:variable>
+                        <xsl:if test="string($sumaTxt) != '' and round(number($sumaTxt)) != number(.)">
+                          <xsl:value-of select="local-name()"/><xsl:text>, </xsl:text>
+                        </xsl:if>
+                      </xsl:for-each>
+                    </xsl:variable>
+                    <xsl:variable name="niezgodne" select="substring(string($lista), 1, string-length(string($lista)) - 2)"/>
+                    <td class="num" colspan="2">
+                      <xsl:choose>
+                        <xsl:when test="$niezgodne != ''">niezgodne: <xsl:value-of select="$niezgodne"/></xsl:when>
+                        <xsl:otherwise>wszystkie zgodne</xsl:otherwise>
+                      </xsl:choose>
+                    </td>
+                    <td><xsl:choose><xsl:when test="$niezgodne != ''"><span class="blad">✗</span></xsl:when><xsl:otherwise><span class="ok">✓</span></xsl:otherwise></xsl:choose></td>
+                  </xsl:otherwise>
+                </xsl:choose>
               </tr>
             </xsl:if>
           </tbody>
@@ -402,6 +470,18 @@
   </xsl:template>
 
   <!-- ============================================================ -->
+  <!-- suma pól K_<nr> z ewidencji tego pliku i (dla deklaracji kwartalnej) pozostałych
+       miesięcy kwartału; pusty wynik, gdy pole K_<nr> nigdzie nie występuje -->
+  <xsl:template name="sumaK">
+    <xsl:param name="nr"/>
+    <xsl:variable name="kpola" select="key('kpole', concat('K_', $nr))"/>
+    <xsl:variable name="inne" select="substring-before(substring-after($kwartalSumy, concat('|K_', $nr, '=')), '|')"/>
+    <xsl:choose>
+      <xsl:when test="$inne != ''"><xsl:value-of select="sum($kpola) + number($inne)"/></xsl:when>
+      <xsl:when test="$kpola"><xsl:value-of select="sum($kpola)"/></xsl:when>
+    </xsl:choose>
+  </xsl:template>
+
   <xsl:template name="wierszKontroli">
     <xsl:param name="opis"/>
     <xsl:param name="wPliku"/>
@@ -756,7 +836,9 @@ tfoot td{font-weight:600;background:#eef1f5}
 dt[title],.badge[title]{cursor:help}
 dt[title]{text-decoration:underline dotted #b0b7c0}
 tr.fp td{color:var(--muted);font-style:italic}
-.ok{color:var(--ok);font-weight:700}.blad{color:var(--blad);font-weight:700}
+.ok{color:var(--ok);font-weight:700}.blad{color:var(--blad);font-weight:700}.nd{color:var(--muted);font-weight:700;cursor:help}
+.info{margin:0 0 10px;padding:8px 12px;border:1px solid var(--linia);border-left:4px solid var(--akcent);border-radius:6px;background:var(--karta);font-size:13px}
+.info.warn{border-left-color:var(--warn);background:#fffaf2}
 .kontrola td:first-child{width:50%}
 .drzewo details{margin-left:16px;border-left:2px solid var(--linia);padding-left:10px}
 .drzewo summary{cursor:pointer;font-weight:600;padding:2px 0}

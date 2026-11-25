@@ -29,6 +29,8 @@ Plik HTML zapisuje się obok pliku XML, pod tą samą nazwą z rozszerzeniem `.h
 | Ewidencja sprzedaży i zakupów | Tabele z wyszukiwarką i sortowaniem po kliknięciu nagłówka, oznaczeniami (GTU, procedury, typ dokumentu, BFK/OFF/DI) i niezerowymi polami K_; opisy pokazują się po najechaniu myszą |
 | Kontrola sum | Liczba wierszy i podatek z `SprzedazCtrl` / `ZakupCtrl` porównane z wartościami wyliczonymi z wierszy; zgodność pozycji deklaracji z ewidencją (P_n = zaokrąglona suma K_n) |
 
+W JPK_V7K deklaracja za cały kwartał jest w pliku za ostatni miesiąc kwartału, a ewidencja w tym pliku dotyczy tylko jednego miesiąca. Program szuka więc plików JPK_V7K za pozostałe miesiące tego samego kwartału: wśród plików wybranych razem z nim i w folderze, w którym leży. Bierze tylko pliki z tym samym NIP-em i rokiem, a gdy za ten sam miesiąc jest kilka plików (np. korekta), używa najnowszego według `DataWytworzeniaJPK`. Jeśli znajdzie komplet, porównuje deklarację z ewidencją z całego kwartału i wypisuje, z których plików skorzystał. Jeśli któregoś miesiąca brakuje, pokazuje sumę z dostępnych miesięcy, ale zgodności nie ocenia (znak – zamiast ✓/✗) i podaje, których miesięcy brakuje.
+
 Faktury do paragonu (`TypDokumentu = FP`) są w tabeli wyszarzone i nie wchodzą do sum ani do porównania z deklaracją, zgodnie ze schemą JPK_V7.
 
 Inne pliki JPK, np. JPK_FA, program pokaże jako drzewo elementów, bez tabel i kontroli.
